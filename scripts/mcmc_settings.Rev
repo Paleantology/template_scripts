@@ -1,0 +1,20 @@
+# FBD PPS Runfile for MCMC (for now)
+# Should be only file that's being modified, so the other script files can be kept steady and this one can serve as run-info reference
+# Orlando Schwery 1. July 2022
+
+# Logical switches
+fromTrace = FALSE  # if true, reads trace to restart MCMC from after crash
+## ==>> needs to be changed to proper checkpointing, probably
+run_PPS = FALSE  # if set to TRUE, skips the actual running of the MCMC after models are initialised
+## ==>> should probably be FALSE here always, and only be TRUE for PPS runfile
+
+
+# Mcmc settings
+gens = 200000  # mcmc generations
+burngens = 2000  # burnin generations
+burntune = 200  # tuning interval for during burnin
+
+
+
+# start it all off by running the MCMC script
+source("scripts/mcmc_TEFBD.Rev")

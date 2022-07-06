@@ -3,49 +3,56 @@
 ################################################
 # Specify the number of categories we would like to use to describe our data. For simplicity,
 
-num_cats = 7
+n_cats = 3
+n_max_states <- 7
+idx = 1
 
+# Draw the concentration parameter of the Dirichlet prior from an exponential hyperprior
+dir_alpha ~ dnExponential(1)
+moves.append( mvScale(dir_alpha, lambda=1, weight=1.0 ) )
+moves.append( mvScale(dir_alpha, lambda=0.1, weight=3.0 ) )
+moves.append( mvScale(dir_alpha, lambda=0.01, weight=5.0 ) )
 
-# Specify the two parameters to the Beta distribution, and the moves on these parameters.
-beta_scale ~ dnLognormal( 0.0, sd=2*0.587405 )
-beta_scale.setValue(4)
-moves[mvi++] = mvScale(beta_scale, lambda=1, weight=5.0 )
+for (i in 2:n_max_states) {
+    morpho_bystate[i - 1] <- morpho
+    morpho_bystate[i - 1].setNumStatesPartition(i)
+    nc = morpho_bystate[i - 1].nchar()
+    if (nc > 0) {
+      pi_prior[idx] := rep(dir_alpha, i)
 
-# Create the Beta distribution, according to the two parameters and the number of categories.
-cats := fnDiscretizeBeta(beta_scale, beta_scale, num_cats)
+      for (j in 1:n_cats) {
+          pi[idx][j] ~ dnDirichlet(pi_prior[idx])
+          moves.append(mvSimplexElementScale(pi[idx][j], alpha=10, weight=1.0))
 
-# Create the Q matrices. These data are binary, so we initialize the Jukes-Cantor matrix with
-# two states. The matrix is initialized from the median values of out four quantiles from
-# the Beta.
+          # reverse the pi[idx][j] vector
+          upper = pi[idx][j].size()
+          for (k in 1:upper) {
+              ind = upper + 1 - k
+              rev_pi[idx][j][k] <- pi[idx][j][ind]
+          }
 
-for (i in 1:cats.size())
-{
-    Q[i] := fnF81(simplex(cats))
+          # make i-by-i rate matrix
+          Q[idx][2*j - 1] := fnF81(pi[idx][j])
+          # need to apply simplex() to convert rev_pi[idx][j] from type Probability[]
+          Q[idx][2*j] := fnF81(simplex(rev_pi[idx][j]))
+      }
+
+      print("The mixture contains "+Q[idx].size()+" Q-matrices:")
+      for (l in 1:Q[idx].size()) {
+          print(" ")
+          Q[idx][l]
+      }
+
+      mat_prior[idx] <- rep(1, 2*n_cats)
+      matrix_probs[idx] ~ dnDirichlet(mat_prior[idx])
+
+      moves.append( mvBetaSimplex(matrix_probs[idx], weight=3.0) )
+      moves.append( mvDirichletSimplex(matrix_probs[idx], weight=1.5) )
+
+      m_morph[idx] ~ dnPhyloCTMC(tree=phylogeny, siteRates=rates_morpho, Q=Q[idx],
+                                 type="Standard", siteMatrices=matrix_probs[idx])
+      m_morph[idx].clamp(morpho_bystate[i-1])
+
+      idx = idx + 1
+    }
 }
-
-# Tell the model what the probability of a character going into any particular category.
-# This prior says that a character is equally likely to be put into any category.
-mat_prior <- rep(1,num_cats)
-matrix_probs ~ dnDirichlet(mat_prior)
-
-moves[mvi++] = mvBetaSimplex(matrix_probs, weight=3.0)
-moves[mvi++] = mvDirichletSimplex(matrix_probs, weight=1.5)
-
-# Set up Gamma-distributed rate variation.
-alpha_morpho ~ dnUniform( 0.0, 1E6 )
-alpha_morpho.setValue(2.54)
-rates_morpho := fnDiscretizeGamma( alpha_morpho, alpha_morpho, 4 )
-
-# Moves on the parameters to the Gamma distribution.
-moves[mvi++] = mvScale(alpha_morpho, lambda=1, weight=2.0)
-
-
-clock_morpho ~ dnExponential(1.0)
-
-moves[mvi++] = mvScale(clock_morpho, lambda=1,    weight=2.0)
-
-# Combine all of our elements into a CTMC. Because we have not observed any invariant sites,
-# we specify the coding is 'variable'. Note that we are now feeding the site matrices to the CTMC.
-
-phyMorpho ~ dnPhyloCTMC(tree=fbd_tree, branchRates=clock_morpho, siteRates=rates_morpho, Q=Q, type="Standard", coding="variable", siteMatrices=matrix_probs)
-phyMorpho.clamp(morpho)

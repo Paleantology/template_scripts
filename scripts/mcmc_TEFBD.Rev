@@ -11,10 +11,6 @@
 #######################
 # Reading in the Data #
 #######################
-# mcmc generations
-gens = 200000
-fromTrace = TRUE
-run_PPS = TRUE
 
 # Create the full list of taxa (including all fossils and extant species #
 taxa <- readTaxonData("Data/taxa.tsv")
@@ -90,7 +86,7 @@ if (run_PPS == FALSE) {
   mymodel.graph("time_homo_4.dot")
 
   # Run Burnin and tuning
-  mymcmc.burnin(generations=2000, tuningInterval=200)
+  mymcmc.burnin(generations=burngens, tuningInterval=burntune)
   # Check acceptance rates
   mymcmc.operatorSummary()
   if (fromTrace == TRUE) {
